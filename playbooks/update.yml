@@ -23,6 +23,28 @@
       register: reboot_required_file
       when: ansible_os_family == "Debian"
 
+    - name: Update firmware on RedHat/CentOS/Fedora servers
+      block:
+        - name: Ensure fwupd is installed
+          dnf:
+            name: fwupd
+            state: present
+
+        - name: Refresh fwupd metadata
+          command: fwupdmgr refresh --force
+          changed_when: false
+
+        - name: Check for firmware upgrades
+          command: fwupdmgr get-upgrades
+          register: fwupd_upgrades
+          failed_when: false
+          changed_when: false
+
+        - name: Apply firmware upgrades
+          command: fwupdmgr update --no-reboot -y
+          when: fwupd_upgrades.rc == 0
+      when: ansible_os_family == "RedHat"
+
     - name: Check if a reboot is needed on RedHat/CentOS/Fedora servers
       command: needs-restarting -r
       register: reboot_required_rhel
@@ -36,11 +58,11 @@
         - ansible_os_family == "Debian"
         - reboot_required_file.stat.exists
 
-    - name: Schedule reboot for RedHat/CentOS/Fedora if kernel updated
-      command: shutdown -r +5 "Reboot in 5 minutes for kernel updates"
+    - name: Schedule reboot for RedHat/CentOS/Fedora if kernel or firmware updated
+      command: shutdown -r +5 "Reboot in 5 minutes for kernel/firmware updates"
       when:
         - ansible_os_family == "RedHat"
-        - reboot_required_rhel.rc == 1
+        - reboot_required_rhel.rc == 1 or (fwupd_upgrades is defined and fwupd_upgrades.rc == 0)
 
 - hosts: windows
   tasks:
