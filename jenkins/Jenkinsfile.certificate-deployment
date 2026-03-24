@@ -6,8 +6,8 @@ pipeline {
     environment {
         BW_ACCESS_TOKEN = credentials('BTW-JENKINS-ACCESSTOKEN')
         ANSIBLE_VENV = "/home/ansible/ansible-venv"
-        INVENTORY = "/home/ansible/Ansible/inventory.yml"
-        PLAYBOOK = "/home/ansible/Ansible/playbooks/certificate-deployment.yml"
+        INVENTORY = "/home/ansible/ansible-playbooks/inventory.yml"
+        PLAYBOOK = "/home/ansible/ansible-playbooks/playbooks/certificate-deployment.yml"
     }
 
     stages {

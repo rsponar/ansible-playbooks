@@ -102,7 +102,7 @@
   gather_facts: false
   vars:
     deploy_fqdn: "{{ lookup('env', 'DEPLOY_FQDN') }}"
-    inventory_file: "/home/ansible/Ansible/inventory.yml"
+    inventory_file: "/home/ansible/ansible-playbooks/inventory.yml"
   tasks:
     - name: Add host to linux group in inventory
       ansible.builtin.lineinfile:

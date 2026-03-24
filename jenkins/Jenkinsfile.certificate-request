@@ -10,8 +10,8 @@ pipeline {
         BW_ACCESS_TOKEN = credentials('BTW-JENKINS-ACCESSTOKEN')
         TARGET_HOST = "${params.TARGET_HOST}"
         ANSIBLE_VENV = "/home/ansible/ansible-venv"
-        INVENTORY = "/home/ansible/Ansible/inventory.yml"
-        PLAYBOOK = "/home/ansible/Ansible/playbooks/certificate-request.yml"
+        INVENTORY = "/home/ansible/ansible-playbooks/inventory.yml"
+        PLAYBOOK = "/home/ansible/ansible-playbooks/playbooks/certificate-request.yml"
     }
 
     stages {

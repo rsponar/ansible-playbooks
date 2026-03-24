@@ -6,8 +6,8 @@ pipeline {
     environment {
         BW_ACCESS_TOKEN = credentials('BTW-JENKINS-ACCESSTOKEN')
         ANSIBLE_VENV = "/home/ansible/ansible-venv"
-        INVENTORY = "/home/ansible/Ansible/inventory.yml"
-        PLAYBOOK = "/home/ansible/Ansible/playbooks/CheckMK-DUI-DailyDowntime.yaml"
+        INVENTORY = "/home/ansible/ansible-playbooks/inventory.yml"
+        PLAYBOOK = "/home/ansible/ansible-playbooks/playbooks/CheckMK-DUI-DailyDowntime.yaml"
     }
 
     stages {

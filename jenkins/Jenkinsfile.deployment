@@ -10,8 +10,8 @@ pipeline {
         BW_ACCESS_TOKEN = credentials('BTW-JENKINS-ACCESSTOKEN')
         DEPLOY_FQDN = "${params.DEPLOY_FQDN}"
         ANSIBLE_VENV = "/home/ansible/ansible-venv"
-        INVENTORY = "/home/ansible/Ansible/inventory.yml"
-        PLAYBOOK = "/home/ansible/Ansible/playbooks/deployment.yml"
+        INVENTORY = "/home/ansible/ansible-playbooks/inventory.yml"
+        PLAYBOOK = "/home/ansible/ansible-playbooks/playbooks/deployment.yml"
     }
 
     stages {
