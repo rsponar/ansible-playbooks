@@ -1,0 +1,32 @@
+- hosts: linux
+  become: true
+  become_method: sudo
+  vars:
+    local_cert_path: "/mnt/nfs/server/Certificates/win-01-ca.cer"
+    cert_name: "win-01-ca.crt"
+  tasks:
+    - name: Ensure ca-certificates package is installed
+      package:
+        name: ca-certificates
+        state: present
+
+    - name: Copy CA certificate to appropriate system directory
+      copy:
+        src: "{{ local_cert_path }}"
+        dest: >-
+          {{
+            '/usr/local/share/ca-certificates/' + cert_name
+              if ansible_os_family == 'Debian'
+              else '/etc/pki/ca-trust/source/anchors/' + cert_name
+          }}
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Update trust store on Debian-based systems
+      command: update-ca-certificates
+      when: ansible_os_family == 'Debian'
+
+    - name: Update trust store on RedHat-based systems
+      command: update-ca-trust extract
+      when: ansible_os_family == 'RedHat'

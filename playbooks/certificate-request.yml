@@ -1,0 +1,97 @@
+---
+- hosts: "{{ target_host }}"
+  become: true
+  become_method: sudo
+  vars:
+    cert_dir: /etc/pki/tls
+    nfs_cert_dir: /mnt/nfs/server/Certificates
+    ca_config: "win-01.lab.sponar.de\\lab-WIN-01-CA-1"
+    cert_template: VMware
+  tasks:
+    - name: Ensure OpenSSL is installed
+      ansible.builtin.package:
+        name: openssl
+        state: present
+
+    - name: Create certificate directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ cert_dir }}/private"
+        - "{{ cert_dir }}/certs"
+        - "{{ nfs_cert_dir }}/{{ inventory_hostname }}"
+
+    - name: Generate private key
+      community.crypto.openssl_privatekey:
+        path: "{{ cert_dir }}/private/{{ inventory_hostname }}.key"
+        type: RSA
+        size: 4096
+        mode: "0600"
+
+    - name: Generate CSR
+      community.crypto.openssl_csr:
+        path: "{{ cert_dir }}/certs/{{ inventory_hostname }}.csr"
+        privatekey_path: "{{ cert_dir }}/private/{{ inventory_hostname }}.key"
+        common_name: "{{ inventory_hostname }}"
+        subject_alt_name:
+          - "DNS:{{ inventory_hostname }}"
+          - "DNS:{{ inventory_hostname.split('.')[0] }}"
+          - "IP:{{ ansible_default_ipv4.address }}"
+        mode: "0644"
+
+    - name: Copy CSR to NFS share
+      ansible.builtin.copy:
+        src: "{{ cert_dir }}/certs/{{ inventory_hostname }}.csr"
+        dest: "{{ nfs_cert_dir }}/{{ inventory_hostname }}/{{ inventory_hostname }}.csr"
+        remote_src: true
+        mode: "0644"
+
+- hosts: win-01.lab.sponar.de
+  vars:
+    nfs_cert_dir: /mnt/nfs/server/Certificates
+    ca_config: "win-01.lab.sponar.de\\lab-WIN-01-CA-1"
+    cert_template: VMware
+    cert_staging: C:\Temp\Certs
+  tasks:
+    - name: Create staging directory on CA
+      ansible.windows.win_file:
+        path: "{{ cert_staging }}"
+        state: directory
+
+    - name: Copy CSR to CA server
+      ansible.windows.win_copy:
+        src: "{{ nfs_cert_dir }}/{{ target_host }}/{{ target_host }}.csr"
+        dest: "{{ cert_staging }}\\{{ target_host }}.csr"
+
+    - name: Sign CSR with Windows CA
+      ansible.windows.win_command: >
+        certreq -submit -config "{{ ca_config }}"
+        -attrib "CertificateTemplate:{{ cert_template }}"
+        "{{ cert_staging }}\\{{ target_host }}.csr"
+        "{{ cert_staging }}\\{{ target_host }}.crt"
+
+    - name: Copy signed certificate back to NFS share
+      ansible.windows.win_copy:
+        src: "{{ cert_staging }}\\{{ target_host }}.crt"
+        dest: "{{ nfs_cert_dir }}/{{ target_host }}/{{ target_host }}.crt"
+        remote_src: true
+
+- hosts: "{{ target_host }}"
+  become: true
+  become_method: sudo
+  vars:
+    cert_dir: /etc/pki/tls
+    nfs_cert_dir: /mnt/nfs/server/Certificates
+  tasks:
+    - name: Deploy signed certificate
+      ansible.builtin.copy:
+        src: "{{ nfs_cert_dir }}/{{ inventory_hostname }}/{{ inventory_hostname }}.crt"
+        dest: "{{ cert_dir }}/certs/{{ inventory_hostname }}.crt"
+        remote_src: true
+        mode: "0644"
+
+    - name: Update CA trust store
+      ansible.builtin.command: update-ca-trust extract
+      when: ansible_os_family == "RedHat"

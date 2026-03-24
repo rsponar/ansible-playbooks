@@ -1,0 +1,55 @@
+---
+- name: Install Wazuh Agent
+  hosts: linux
+  become: true
+  become_method: sudo
+  vars:
+    wazuh_manager: 'waz-01.lab.sponar.de'
+    wazuh_version: '4.14.3'
+
+  tasks:
+    - name: Download and install Wazuh agent (Debian/Ubuntu)
+      shell: |
+        wget https://packages.wazuh.com/4.x/apt/pool/main/w/wazuh-agent/wazuh-agent_{{ wazuh_version }}_amd64.deb && \
+        WAZUH_MANAGER='{{ wazuh_manager }}' dpkg -i ./wazuh-agent_{{ wazuh_version }}_amd64.deb
+      args:
+        creates: /var/ossec/bin/wazuh-control
+      when: ansible_os_family == "Debian"
+
+    - name: Download and install Wazuh agent (RedHat/CentOS)
+      shell: |
+        curl -o wazuh-agent-{{ wazuh_version }}.x86_64.rpm https://packages.wazuh.com/4.x/yum/wazuh-agent-{{ wazuh_version }}.x86_64.rpm && \
+        WAZUH_MANAGER='{{ wazuh_manager }}' rpm -ihv wazuh-agent-{{ wazuh_version }}.x86_64.rpm
+      args:
+        creates: /var/ossec/bin/wazuh-control
+      when: ansible_os_family == "RedHat"
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+
+    - name: Enable and start Wazuh agent service
+      systemd:
+        name: wazuh-agent
+        state: started
+        enabled: yes
+
+- name: Install Wazuh Agent on Windows
+  hosts: windows
+  vars:
+    wazuh_manager: 'waz-01.lab.sponar.de'
+    wazuh_version: '{{ wazuh_version }}'
+
+  tasks:
+    - name: Download and install Wazuh agent
+      win_shell: |
+        Invoke-WebRequest -Uri https://packages.wazuh.com/4.x/windows/wazuh-agent-{{ wazuh_version }}.msi -OutFile $env:tmp\wazuh-agent
+        msiexec.exe /i $env:tmp\wazuh-agent /q WAZUH_MANAGER='{{ wazuh_manager }}'
+      args:
+        creates: 'C:\Program Files (x86)\ossec-agent\wazuh-agent.exe'
+
+    - name: Start Wazuh service
+      win_service:
+        name: Wazuh
+        state: started
+        start_mode: auto

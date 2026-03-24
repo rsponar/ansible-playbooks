@@ -1,0 +1,44 @@
+# schedule_downtime_multiple_hosts.yml
+- name: Schedule daily downtime for multiple hosts in Checkmk
+  hosts: localhost
+  gather_facts: false
+  vars:
+    checkmk_host: "chk-01.lab.sponar.de"
+    api_user: "automation"
+    btw_access_token: "{{ lookup('env', 'BW_ACCESS_TOKEN') }}"
+    btw_monitoring_secret: "{{ lookup('bitwarden.secrets.lookup', '615b1a5f-719d-43eb-9c61-b31f008369f6', access_token=btw_access_token) }}"
+    api_secret: "{{ btw_monitoring_secret | string }}"
+    site_id: "monitoring"
+
+    host_names:
+      - nas1.lab.sponar.de
+      - esx01.lab.sponar.de
+      - apollo.lab.sponar.de
+      - opn-01.lab.sponar.de
+      - fritz-osn.lab.sponar.de
+
+    downtime_start: "tomorrow 00:30"
+    downtime_end: "tomorrow 01:45"
+
+  tasks:
+    - name: Schedule downtime for a host via REST API (Checkmk 2.3 CRE+)
+      uri:
+        url: "https://{{ checkmk_host }}/{{ site_id }}/check_mk/api/1.0/domain-types/downtime/collections/host"
+        method: POST
+        force_basic_auth: true
+        user: "{{ api_user }}"
+        password: "{{ api_secret }}"
+        headers:
+          Accept: "application/json"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          start_time: "{{ lookup('pipe', 'date -Is --date=\"{{ downtime_start }}\"') | trim }}"
+          end_time: "{{ lookup('pipe', 'date -Is --date=\"{{ downtime_end }}\"') | trim }}"
+          recur: "fixed"
+          duration: 0
+          comment: "Daily Downtime DUI"
+          downtime_type: "host"
+          host_name: "{{ item }}"
+        status_code: 204
+      loop: "{{ host_names }}"

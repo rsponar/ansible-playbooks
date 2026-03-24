@@ -1,0 +1,51 @@
+def common
+
+pipeline {
+    agent { label 'ansible' }
+    parameters {
+        string(name: 'TARGET_HOST', defaultValue: '', description: 'FQDN of the host to request a certificate for (e.g., lin-03.lab.sponar.de)')
+    }
+
+    environment {
+        BW_ACCESS_TOKEN = credentials('BTW-JENKINS-ACCESSTOKEN')
+        TARGET_HOST = "${params.TARGET_HOST}"
+        ANSIBLE_VENV = "/home/ansible/ansible-venv"
+        INVENTORY = "/home/ansible/Ansible/inventory.yml"
+        PLAYBOOK = "/home/ansible/Ansible/playbooks/certificate-request.yml"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                script { common = load 'jenkins/common.groovy' }
+            }
+        }
+        stage('Setup Python environment & Install Ansible') {
+            steps {
+                script { common.setupAnsible() }
+            }
+        }
+        stage('Run Ansible Playbook') {
+            steps {
+                script {
+                    common.runPlaybook(
+                        [BW_ACCESS_TOKEN: env.BW_ACCESS_TOKEN],
+                        [target_host: env.TARGET_HOST]
+                    )
+                }
+            }
+        }
+    }
+    post {
+        always {
+            sh 'echo "Cleaning up sensitive data"'
+        }
+        failure {
+            script { common.notifyFailed() }
+        }
+        success {
+            script { common.notifySuccess("Certificate request completed successfully for ${params.TARGET_HOST}.") }
+        }
+    }
+}

@@ -1,0 +1,57 @@
+- hosts: linux
+  become: true
+  become_method: sudo
+  tasks:
+    - name: Update apt repo and cache on all Debian/Ubuntu boxes
+      apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
+      when: ansible_os_family == "Debian"
+
+    - name: Upgrade all packages on Debian/Ubuntu servers
+      apt: upgrade=dist force_apt_get=yes
+      when: ansible_os_family == "Debian"
+
+    - name: Update all packages on RedHat/CentOS/Fedora servers
+      dnf:
+        name: "*"
+        state: latest
+        update_cache: yes
+      when: ansible_os_family == "RedHat"
+
+    - name: Check if a reboot is needed on Debian/Ubuntu servers
+      stat:
+        path: /var/run/reboot-required
+      register: reboot_required_file
+      when: ansible_os_family == "Debian"
+
+    - name: Check if a reboot is needed on RedHat/CentOS/Fedora servers
+      command: needs-restarting -r
+      register: reboot_required_rhel
+      failed_when: false
+      changed_when: reboot_required_rhel.rc == 1
+      when: ansible_os_family == "RedHat"
+
+    - name: Schedule reboot for Debian/Ubuntu if kernel updated
+      command: shutdown -r +5 "Reboot in 5 minutes for kernel updates"
+      when:
+        - ansible_os_family == "Debian"
+        - reboot_required_file.stat.exists
+
+    - name: Schedule reboot for RedHat/CentOS/Fedora if kernel updated
+      command: shutdown -r +5 "Reboot in 5 minutes for kernel updates"
+      when:
+        - ansible_os_family == "RedHat"
+        - reboot_required_rhel.rc == 1
+
+- hosts: windows
+  tasks:
+    - name: Install all critical and security updates
+      win_updates:
+        category_names:
+        - CriticalUpdates
+        - SecurityUpdates
+        state: installed
+      register: update_result
+
+    - name: Reboot host if required
+      win_reboot:
+      when: update_result.reboot_required

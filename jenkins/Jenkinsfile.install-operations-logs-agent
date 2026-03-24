@@ -1,0 +1,46 @@
+def common
+
+pipeline {
+    agent { label 'ansible' }
+
+    environment {
+        BW_ACCESS_TOKEN = credentials('BTW-JENKINS-ACCESSTOKEN')
+        ANSIBLE_VENV = "/home/ansible/ansible-venv"
+        INVENTORY = "/home/ansible/Ansible/inventory.yml"
+        PLAYBOOK = "/home/ansible/Ansible/playbooks/install-OperationsLogsAgent.yml"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                script { common = load 'jenkins/common.groovy' }
+            }
+        }
+        stage('Setup Python environment & Install Ansible') {
+            steps {
+                script { common.setupAnsible() }
+            }
+        }
+        stage('Run Ansible Playbook') {
+            steps {
+                script {
+                    common.runPlaybook([
+                        BW_ACCESS_TOKEN: env.BW_ACCESS_TOKEN
+                    ])
+                }
+            }
+        }
+    }
+    post {
+        always {
+            sh 'echo "Cleaning up sensitive data"'
+        }
+        failure {
+            script { common.notifyFailed() }
+        }
+        success {
+            script { common.notifySuccess("Operations Logs Agent installation completed successfully.") }
+        }
+    }
+}

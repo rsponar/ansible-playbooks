@@ -1,0 +1,112 @@
+---
+- hosts: localhost
+  gather_facts: false
+  vars:
+    target_host: "{{ lookup('env', 'DEPLOY_FQDN') }}"
+  tasks:
+    - add_host:
+        name: "{{ target_host }}"
+        groups: dynamically_created_hosts
+
+    - name: Add SSH host key to known_hosts
+      ansible.builtin.known_hosts:
+        name: "{{ target_host }}"
+        key: "{{ lookup('pipe', 'ssh-keyscan -t ed25519,ecdsa ' + target_host + ' 2>/dev/null') }}"
+        path: /home/ansible/.ssh/known_hosts
+        state: present
+
+- hosts: dynamically_created_hosts
+  become: true
+  become_method: sudo
+  vars:
+    btw_access_token: "{{ lookup('env', 'BW_ACCESS_TOKEN') }}"
+    deploy_fqdn: "{{ lookup('env', 'DEPLOY_FQDN') }}"
+    btw_deployment_password: "{{ lookup('bitwarden.secrets.lookup', 'e469c322-4f2c-471f-a370-b20d00a9ae2d', access_token=btw_access_token) }}"
+    ansible_become_password: "{{ btw_deployment_password | string }}"
+    btw_ansible_password: "{{ lookup('bitwarden.secrets.lookup', '8e6d4f01-d7d2-4d14-8d6e-b20c014e5dc9', access_token=btw_access_token) }}"
+    ansible_user: ansible
+    ansible_password: "{{ btw_deployment_password | string }}"
+    sudo_group: "{{ 'wheel' if ansible_os_family == 'RedHat' else 'sudo' }}"
+    rhel_username: "rsponar"
+    btw_rhel_password: "{{ lookup('bitwarden.secrets.lookup', '56a84fe2-53d5-469a-9a35-b3ef014bbae8', access_token=btw_access_token) }}"
+  tasks:
+    - name: Create kg user
+      ansible.builtin.user:
+        name: kg
+        shell: /bin/bash
+        groups: "{{ sudo_group }}"
+        append: yes
+        create_home: yes
+
+    - name: Configure passwordless sudo for kg
+      ansible.builtin.copy:
+        dest: /etc/sudoers.d/kg
+        content: "kg ALL=(ALL) NOPASSWD: ALL\n"
+        owner: root
+        group: root
+        mode: "0440"
+        validate: "visudo -cf %s"
+
+    - name: Register RHEL system with Red Hat subscription
+      community.general.redhat_subscription:
+        state: present
+        username: "{{ rhel_username }}"
+        password: "{{ btw_rhel_password | string }}"
+        auto_attach: false
+      when: ansible_os_family == "RedHat" and ansible_distribution == "RedHat"
+
+    - name: install packages (Debian/Ubuntu)
+      ansible.builtin.apt:
+        pkg:
+        - vim
+        - open-vm-tools
+        - ufw
+      when: ansible_os_family == "Debian"
+
+    - name: install packages (RedHat/CentOS/Amazon Linux)
+      ansible.builtin.dnf:
+        name:
+        - vim
+        - open-vm-tools
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Set ansible ssh key
+      ansible.posix.authorized_key:
+        user: ansible
+        state: present
+        key: "{{ lookup('file', '/home/ansible/ssh_keys/ansible.pub') }}"
+
+    - name: Set yubikey-1 ssh key
+      ansible.posix.authorized_key:
+        user: kg
+        state: present
+        key: "{{ lookup('file', '/home/ansible/ssh_keys/yubikey-1.pub') }}"
+
+    - name: Set yubikey-2 ssh key
+      ansible.posix.authorized_key:
+        user: kg
+        state: present
+        key: "{{ lookup('file', '/home/ansible/ssh_keys/yubikey-2.pub') }}"
+
+    - name: set hostname
+      ansible.builtin.hostname:
+        name: "{{ deploy_fqdn }}"
+
+    - name: Change ansible user password
+      ansible.builtin.user:
+        name: ansible
+        password: "{{ btw_ansible_password | string | password_hash('sha512') }}"
+
+- hosts: localhost
+  gather_facts: false
+  vars:
+    deploy_fqdn: "{{ lookup('env', 'DEPLOY_FQDN') }}"
+    inventory_file: "/home/ansible/Ansible/inventory.yml"
+  tasks:
+    - name: Add host to linux group in inventory
+      ansible.builtin.lineinfile:
+        path: "{{ inventory_file }}"
+        insertafter: '^\s+vpnbuntu\.lab\.sponar\.de:\s*$'
+        line: "    {{ deploy_fqdn }}:"
+        state: present

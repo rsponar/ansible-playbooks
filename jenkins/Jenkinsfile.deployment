@@ -1,0 +1,51 @@
+def common
+
+pipeline {
+    agent { label 'ansible' }
+    parameters {
+        string(name: 'DEPLOY_FQDN', defaultValue: '', description: 'FQDN of the host to deploy (e.g., server.lab.sponar.de)')
+    }
+
+    environment {
+        BW_ACCESS_TOKEN = credentials('BTW-JENKINS-ACCESSTOKEN')
+        DEPLOY_FQDN = "${params.DEPLOY_FQDN}"
+        ANSIBLE_VENV = "/home/ansible/ansible-venv"
+        INVENTORY = "/home/ansible/Ansible/inventory.yml"
+        PLAYBOOK = "/home/ansible/Ansible/playbooks/deployment.yml"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                script { common = load 'jenkins/common.groovy' }
+            }
+        }
+        stage('Setup Python environment & Install Ansible') {
+            steps {
+                script { common.setupAnsible() }
+            }
+        }
+        stage('Run Ansible Playbook') {
+            steps {
+                script {
+                    common.runPlaybook([
+                        BW_ACCESS_TOKEN: env.BW_ACCESS_TOKEN,
+                        DEPLOY_FQDN: env.DEPLOY_FQDN
+                    ])
+                }
+            }
+        }
+    }
+    post {
+        always {
+            sh 'echo "Cleaning up sensitive data"'
+        }
+        failure {
+            script { common.notifyFailed() }
+        }
+        success {
+            script { common.notifySuccess("Deployment completed successfully for ${params.DEPLOY_FQDN}.") }
+        }
+    }
+}

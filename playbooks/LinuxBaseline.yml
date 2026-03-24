@@ -1,0 +1,38 @@
+- hosts: linux 
+  become: true 
+  become_method: sudo
+  tasks:
+    - name: Install NFS client packages
+      ansible.builtin.package:
+        name: "{{ 'nfs-utils' if ansible_os_family == 'RedHat' else 'nfs-common' }}"
+        state: present
+
+    - name: Create NFS mount directory
+      ansible.builtin.file:
+        path: /mnt/nfs/server
+        state: directory
+        mode: "0755"
+
+    - name: Mount NFS share permanently
+      ansible.posix.mount:
+        src: "nas01.lab.sponar.de:/Server"
+        path: /mnt/nfs/server
+        fstype: nfs
+        opts: defaults,nosuid,nodev,noexec,hard,intr,timeo=600,retrans=3,_netdev
+        state: mounted
+
+    - name: Set ansible ssh key
+      ansible.posix.authorized_key:
+        user: ansible 
+        state: present
+        key: "{{ lookup('file', '/mnt/nfs/server/ssh_keys/ansible.pub') }}"
+    - name: Set yubikey-1 ssh key
+      ansible.posix.authorized_key:
+        user: kg 
+        state: present
+        key: "{{ lookup('file', '/mnt/nfs/server/ssh_keys/yubikey-1.pub') }}"
+    - name: Set yubikey-2 ssh key
+      ansible.posix.authorized_key:
+        user: kg 
+        state: present
+        key: "{{ lookup('file', '/mnt/nfs/server/ssh_keys/yubikey-2.pub') }}"

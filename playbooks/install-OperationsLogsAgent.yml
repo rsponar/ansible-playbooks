@@ -1,0 +1,129 @@
+- hosts: linux
+  become: true
+  become_method: sudo
+  vars:
+    local_deb_path: "/mnt/nfs/server/Setup/Operations-Logs-Agent.deb"
+    local_rpm_path: "/mnt/nfs/server/Setup/Operations-Logs-Agent.rpm"
+    remote_pkg_path: "/tmp/Operations-Logs-Agent.{{ 'rpm' if ansible_os_family == 'RedHat' else 'deb' }}"
+    remote_liagent_ini_path: /var/lib/loginsight-agent/liagent.ini
+    vcf_logs_fqdn: "vcf-operations-logs.lab.sponar.de"
+    liagent_log_path: "/var/liagent.log"
+
+  tasks:
+    - name: Copy .deb file to remote target
+      ansible.builtin.copy:
+        src: "{{ local_deb_path }}"
+        dest: "{{ remote_pkg_path }}"
+        mode: '0644'
+      when: ansible_os_family == 'Debian'
+
+    - name: Copy .rpm file to remote target
+      ansible.builtin.copy:
+        src: "{{ local_rpm_path }}"
+        dest: "{{ remote_pkg_path }}"
+        mode: '0644'
+      when: ansible_os_family == 'RedHat'
+
+    - name: Install .deb package on remote target
+      ansible.builtin.apt:
+        deb: "{{ remote_pkg_path }}"
+        state: present
+      when: ansible_os_family == 'Debian'
+
+    - name: Install .rpm package on remote target
+      ansible.builtin.dnf:
+        name: "{{ remote_pkg_path }}"
+        state: present
+        disable_gpg_check: true
+      when: ansible_os_family == 'RedHat'
+
+    - name: Remove old blockinfile managed block
+      ansible.builtin.blockinfile:
+        path: "{{ remote_liagent_ini_path }}"
+        state: absent
+      notify: restart liagentd
+
+    - name: Set server hostname
+      community.general.ini_file:
+        path: "{{ remote_liagent_ini_path }}"
+        section: server
+        option: hostname
+        value: "{{ vcf_logs_fqdn }}"
+        no_extra_spaces: true
+      notify: restart liagentd
+
+    - name: Set server protocol
+      community.general.ini_file:
+        path: "{{ remote_liagent_ini_path }}"
+        section: server
+        option: proto
+        value: cfapi
+        no_extra_spaces: true
+      notify: restart liagentd
+
+    - name: Set server port
+      community.general.ini_file:
+        path: "{{ remote_liagent_ini_path }}"
+        section: server
+        option: port
+        value: "9543"
+        no_extra_spaces: true
+      notify: restart liagentd
+
+    - name: Set server SSL
+      community.general.ini_file:
+        path: "{{ remote_liagent_ini_path }}"
+        section: server
+        option: ssl
+        value: "yes"
+        no_extra_spaces: true
+      notify: restart liagentd
+
+    - name: Set SSL CA path
+      community.general.ini_file:
+        path: "{{ remote_liagent_ini_path }}"
+        section: server
+        option: ssl_ca_path
+        value: "{{ '/etc/pki/ca-trust/source/anchors/win-01-ca.crt' if ansible_os_family == 'RedHat' else '/usr/local/share/ca-certificates/win-01-ca.crt' }}"
+        no_extra_spaces: true
+      notify: restart liagentd
+
+    - name: Disable central config override
+      community.general.ini_file:
+        path: "{{ remote_liagent_ini_path }}"
+        section: server
+        option: central_config
+        value: "no"
+        no_extra_spaces: true
+      notify: restart liagentd
+
+    - name: Enable syslog collection directory
+      community.general.ini_file:
+        path: "{{ remote_liagent_ini_path }}"
+        section: "filelog|syslog"
+        option: directory
+        value: /var/log
+        no_extra_spaces: true
+      notify: restart liagentd
+
+    - name: Set syslog files to collect
+      community.general.ini_file:
+        path: "{{ remote_liagent_ini_path }}"
+        section: "filelog|syslog"
+        option: include
+        value: "{{ 'messages;messages.?;secure;cron;maillog' if ansible_os_family == 'RedHat' else 'syslog;syslog.?;auth.log;kern.log' }}"
+        no_extra_spaces: true
+      notify: restart liagentd
+
+    - name: Ensure liagentd service is enabled and started
+      ansible.builtin.systemd:
+        name: liagentd
+        enabled: yes
+        state: started
+        daemon_reload: yes
+
+  handlers:
+    - name: restart liagentd
+      ansible.builtin.systemd:
+        name: liagentd
+        state: restarted
