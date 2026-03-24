@@ -64,7 +64,7 @@
       command: shutdown -r +5 "Reboot in 5 minutes for kernel/firmware updates"
       when:
         - ansible_os_family == "RedHat"
-        - reboot_required_rhel.rc == 1 or (fwupd_upgrades is defined and fwupd_upgrades.rc == 0)
+        - (reboot_required_rhel.rc is defined and reboot_required_rhel.rc == 1) or (fwupd_upgrades.rc is defined and fwupd_upgrades.rc == 0)
 
 - hosts: windows
   tasks:
