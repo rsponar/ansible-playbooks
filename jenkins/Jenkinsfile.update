@@ -40,7 +40,7 @@ pipeline {
             script { common.notifyFailed() }
         }
         success {
-            script { common.notifySuccess("Package updates completed successfully.") }
+            sh 'echo "SUCESS!"'
         }
     }
 }
