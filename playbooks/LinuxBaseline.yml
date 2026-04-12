@@ -31,6 +31,57 @@
         state: present
       when: ansible_os_family == "RedHat"
 
+    - name: Set DNS servers on RedHat/CentOS/Fedora (via nmcli)
+      block:
+        - name: Get active network connection name
+          command: nmcli -t -f NAME,DEVICE,STATE con show --active
+          register: nmcli_connections
+          changed_when: false
+
+        - name: Set primary and secondary DNS on active connection
+          command: >
+            nmcli con mod "{{ nmcli_connections.stdout_lines[0].split(':')[0] }}"
+            ipv4.dns "172.20.5.70 192.168.5.1"
+          when: nmcli_connections.stdout_lines | length > 0
+
+        - name: Apply connection changes
+          command: >
+            nmcli con up "{{ nmcli_connections.stdout_lines[0].split(':')[0] }}"
+          when: nmcli_connections.stdout_lines | length > 0
+      when: ansible_os_family == "RedHat"
+
+    - name: Ensure systemd-resolved is enabled and running (Debian/Ubuntu)
+      ansible.builtin.service:
+        name: systemd-resolved
+        state: started
+        enabled: true
+      when: ansible_os_family == "Debian"
+
+    - name: Ensure systemd-resolved drop-in directory exists (Debian/Ubuntu)
+      ansible.builtin.file:
+        path: /etc/systemd/resolved.conf.d
+        state: directory
+        mode: "0755"
+      when: ansible_os_family == "Debian"
+
+    - name: Set DNS servers on Debian/Ubuntu (via systemd-resolved drop-in)
+      ansible.builtin.copy:
+        dest: /etc/systemd/resolved.conf.d/dns.conf
+        content: |
+          [Resolve]
+          DNS=172.20.5.70 192.168.5.1
+        mode: "0644"
+      notify: Restart systemd-resolved
+      when: ansible_os_family == "Debian"
+
+    - name: Point /etc/resolv.conf to systemd-resolved stub (Debian/Ubuntu)
+      ansible.builtin.file:
+        src: /run/systemd/resolve/stub-resolv.conf
+        dest: /etc/resolv.conf
+        state: link
+        force: true
+      when: ansible_os_family == "Debian"
+
     - name: Set ansible ssh key
       ansible.posix.authorized_key:
         user: ansible 
@@ -43,6 +94,12 @@
         key: "{{ lookup('file', '/mnt/nfs/server/ssh_keys/yubikey-1.pub') }}"
     - name: Set yubikey-2 ssh key
       ansible.posix.authorized_key:
-        user: kg 
+        user: kg
         state: present
         key: "{{ lookup('file', '/mnt/nfs/server/ssh_keys/yubikey-2.pub') }}"
+
+  handlers:
+    - name: Restart systemd-resolved
+      ansible.builtin.service:
+        name: systemd-resolved
+        state: restarted
