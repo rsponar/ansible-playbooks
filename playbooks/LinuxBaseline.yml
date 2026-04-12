@@ -21,6 +21,16 @@
         opts: defaults,nosuid,nodev,noexec,hard,intr,timeo=600,retrans=3,_netdev
         state: mounted
 
+    - name: install packages (RedHat/CentOS/Amazon Linux)
+      ansible.builtin.dnf:
+        name:
+        - vim
+        - open-vm-tools
+        - net-tools
+        - cloud-utils-growpart
+        state: present
+      when: ansible_os_family == "RedHat"
+
     - name: Set ansible ssh key
       ansible.posix.authorized_key:
         user: ansible 
