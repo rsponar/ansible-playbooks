@@ -7,18 +7,31 @@
     wazuh_manager: 'waz-01.lab.sponar.de'
 
   tasks:
-    - name: Download and install Wazuh agent (Debian/Ubuntu)
-      shell: |
-        wget https://packages.wazuh.com/4.x/apt/pool/main/w/wazuh-agent/wazuh-agent_{{ wazuh_version }}_amd64.deb && \
-        WAZUH_MANAGER='{{ wazuh_manager }}' dpkg -i ./wazuh-agent_{{ wazuh_version }}_amd64.deb
-      args:
-        creates: /var/ossec/bin/wazuh-control
+    - name: Import Wazuh GPG key (Debian)
+      ansible.builtin.shell:
+        cmd: curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH | gpg --dearmor -o /usr/share/keyrings/wazuh.gpg
+        creates: /usr/share/keyrings/wazuh.gpg
+      when: ansible_os_family == "Debian"
+
+    - name: Add Wazuh repository (Debian)
+      ansible.builtin.apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main"
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Install Wazuh agent (Debian)
+      ansible.builtin.apt:
+        name: wazuh-agent
+        state: present
+        update_cache: yes
+      environment:
+        WAZUH_MANAGER: "{{ wazuh_manager }}"
       when: ansible_os_family == "Debian"
 
     - name: Import Wazuh GPG key (RedHat)
-      ansible.builtin.rpm_key:
-        key: https://packages.wazuh.com/key/GPG-KEY-WAZUH
-        state: present
+      ansible.builtin.shell:
+        cmd: rpm --import https://packages.wazuh.com/key/GPG-KEY-WAZUH
+      changed_when: false
       when: ansible_os_family == "RedHat"
 
     - name: Add Wazuh repository (RedHat)
