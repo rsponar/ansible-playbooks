@@ -5,7 +5,6 @@
   become_method: sudo
   vars:
     wazuh_manager: 'waz-01.lab.sponar.de'
-    wazuh_version: '4.14.3'
 
   tasks:
     - name: Download and install Wazuh agent (Debian/Ubuntu)
@@ -16,12 +15,28 @@
         creates: /var/ossec/bin/wazuh-control
       when: ansible_os_family == "Debian"
 
-    - name: Download and install Wazuh agent (RedHat/CentOS)
-      shell: |
-        curl -o wazuh-agent-{{ wazuh_version }}.x86_64.rpm https://packages.wazuh.com/4.x/yum/wazuh-agent-{{ wazuh_version }}.x86_64.rpm && \
-        WAZUH_MANAGER='{{ wazuh_manager }}' rpm -ihv wazuh-agent-{{ wazuh_version }}.x86_64.rpm
-      args:
-        creates: /var/ossec/bin/wazuh-control
+    - name: Import Wazuh GPG key (RedHat)
+      ansible.builtin.rpm_key:
+        key: https://packages.wazuh.com/key/GPG-KEY-WAZUH
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Add Wazuh repository (RedHat)
+      ansible.builtin.yum_repository:
+        name: wazuh
+        description: "EL-$releasever - Wazuh"
+        baseurl: https://packages.wazuh.com/4.x/yum/
+        gpgcheck: yes
+        gpgkey: https://packages.wazuh.com/key/GPG-KEY-WAZUH
+        enabled: yes
+      when: ansible_os_family == "RedHat"
+
+    - name: Install Wazuh agent (RedHat)
+      ansible.builtin.dnf:
+        name: wazuh-agent
+        state: present
+      environment:
+        WAZUH_MANAGER: "{{ wazuh_manager }}"
       when: ansible_os_family == "RedHat"
 
     - name: Reload systemd daemon
