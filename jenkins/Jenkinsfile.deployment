@@ -43,9 +43,7 @@ pipeline {
         }
         failure {
             script { common.notifyFailed() }
-        }
-        success {
-            script { common.notifySuccess("Deployment completed successfully for ${params.DEPLOY_FQDN}.") }
+        }.") }
         }
     }
 }

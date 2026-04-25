@@ -43,9 +43,7 @@ pipeline {
         }
         failure {
             script { common.notifyFailed() }
-        }
-        success {
-            script { common.notifySuccess("Certificate request completed successfully for ${params.TARGET_HOST}.") }
+        }.") }
         }
     }
 }

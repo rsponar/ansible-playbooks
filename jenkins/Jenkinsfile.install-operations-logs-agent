@@ -39,8 +39,6 @@ pipeline {
         failure {
             script { common.notifyFailed() }
         }
-        success {
-            script { common.notifySuccess("Operations Logs Agent installation completed successfully.") }
         }
     }
 }

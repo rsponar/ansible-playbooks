@@ -39,8 +39,5 @@ pipeline {
         failure {
             script { common.notifyFailed() }
         }
-        success {
-            sh 'echo "SUCCESS!"'
-        }
     }
 }

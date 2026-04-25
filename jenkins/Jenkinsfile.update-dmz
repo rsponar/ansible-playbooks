@@ -39,8 +39,6 @@ pipeline {
         failure {
             script { common.notifyFailed() }
         }
-        success {
-            script { common.notifySuccess("DMZ package updates completed successfully.") }
         }
     }
 }
