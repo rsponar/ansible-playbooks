@@ -39,6 +39,5 @@ pipeline {
         failure {
             script { common.notifyFailed() }
         }
-        }
     }
 }
